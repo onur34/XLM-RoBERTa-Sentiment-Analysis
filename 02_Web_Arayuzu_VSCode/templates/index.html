@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>XLM-RoBERTa Duygu Analizi</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; padding: 40px; }
+        .container { background-color: white; width: 800px; padding: 30px; border-radius: 12px; box-shadow: 0px 5px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .bolum { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-top: 20px; border: 1px solid #e0e0e0; }
+        .bolum-baslik { font-size: 18px; font-weight: bold; color: #34495e; margin-bottom: 15px; }
+        
+        textarea { width: 100%; height: 80px; padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; resize: none; box-sizing: border-box; }
+        input[type="file"] { padding: 10px; border: 1px dashed #7f8c8d; border-radius: 6px; width: 100%; box-sizing: border-box; background: #fff; cursor: pointer; }
+        
+        button { background-color: #3498db; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 6px; margin-top: 10px; cursor: pointer; transition: 0.3s; width: 100%; font-weight: bold; }
+        button:hover { background-color: #2980b9; }
+        
+        .sonuc-kutusu { margin-top: 15px; font-size: 16px; padding: 15px; border-radius: 6px; display: none; background: #fff; border: 1px solid #ddd; }
+        
+        .istatistik-kapsayici { display: flex; justify-content: space-between; margin-top: 15px; }
+        .kutu { width: 48%; padding: 15px; border-radius: 8px; color: white; box-sizing: border-box; }
+        .olumlu-kutu { background-color: #2ecc71; }
+        .olumsuz-kutu { background-color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>XLM-RoBERTa Duygu Analizi Sistemi</h2>
+
+        <div class="bolum">
+            <div class="bolum-baslik">1. Tekil Yorum Analizi</div>
+            <textarea id="metin" placeholder="Analiz edilecek tek bir cümle yazın..."></textarea>
+            <button onclick="tekilAnaliz()">Duyguyu Analiz Et</button>
+            <div id="tekil-sonuc" class="sonuc-kutusu" style="text-align: center; font-size: 20px; font-weight: bold;"></div>
+        </div>
+
+        <div class="bolum">
+            <div class="bolum-baslik">2. Toplu Yorum ve Sebep Analizi (CSV Yükle)</div>
+            <p style="font-size: 13px; color: #7f8c8d;">İçinde "metin", "yorum" veya "comment" başlıklı bir sütun olan CSV dosyası yükleyin.</p>
+            <input type="file" id="dosyaSecici" accept=".csv">
+            <button onclick="topluAnaliz()" style="background-color: #8e44ad;">Toplu Analiz Başlat</button>
+            <div id="toplu-sonuc" class="sonuc-kutusu"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // 1. TEKİL ANALİZ FONKSİYONU
+        async function tekilAnaliz() {
+            const metin = document.getElementById('metin').value;
+            const sonucDiv = document.getElementById('tekil-sonuc');
+            if(!metin) return alert("Lütfen metin girin!");
+            
+            sonucDiv.style.display = "block";
+            sonucDiv.innerHTML = "⏳ Yapay Zeka Düşünüyor...";
+            
+            try {
+                const response = await fetch('/tahmin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ metin: metin })
+                });
+                const data = await response.json();
+                
+                if(data.hata) {
+                    sonucDiv.innerHTML = "<span style='color:red;'>Hata: " + data.hata + "</span>";
+                } else {
+                    let renk = data.duygu === 'Olumlu' ? '#2ecc71' : '#e74c3c';
+                    sonucDiv.innerHTML = `<span style='color:${renk};'>${data.duygu}</span> <br><span style='font-size:14px; color:#7f8c8d;'>Güven Skoru: ${data.guven_skoru}</span>`;
+                }
+            } catch (e) { sonucDiv.innerHTML = "Sunucu Hatası!"; }
+        }
+
+        // 2. TOPLU ANALİZ VE BAĞLAM (TEMA) FONKSİYONU
+        async function topluAnaliz() {
+            const dosyaInput = document.getElementById('dosyaSecici');
+            const sonucDiv = document.getElementById('toplu-sonuc');
+            
+            if(dosyaInput.files.length === 0) return alert("Lütfen bir CSV dosyası seçin!");
+            
+            sonucDiv.style.display = "block";
+            sonucDiv.innerHTML = " Dosya okunuyor, yüzlerce yorumu analiz ediyor ve ana bağlamı çıkarıyor. Lütfen bekleyin...";
+            
+            const formData = new FormData();
+            formData.append("dosya", dosyaInput.files[0]);
+
+            try {
+                const response = await fetch('/toplu-analiz', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if(data.hata) {
+                    sonucDiv.innerHTML = "<span style='color:red;'>Hata: " + data.hata + "</span>";
+                    return;
+                }
+
+                // (LİSTESİZ, TEK VE NET CÜMLELİ)
+                sonucDiv.innerHTML = `
+                    <div style="text-align:center; font-weight:bold; font-size:18px; color:#2c3e50; margin-bottom: 20px;">
+                        Toplam İncelenen Yorum: ${data.toplam_yorum}
+                    </div>
+                    <div class="istatistik-kapsayici">
+                        <div class="kutu olumlu-kutu">
+                            <div style="font-size: 28px; font-weight:bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom:10px;">
+                                ${data.olumlu_orani} Olumlu
+                            </div>
+                            <div style="margin-top:15px; font-weight:bold; font-size: 16px;">En Baskın Sebep:</div>
+                            <div style="font-size: 15px; margin-top: 5px;">${data.olumlu_sebepler}</div>
+                        </div>
+                        
+                        <div class="kutu olumsuz-kutu">
+                            <div style="font-size: 28px; font-weight:bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom:10px;">
+                                ${data.olumsuz_orani} Olumsuz
+                            </div>
+                            <div style="margin-top:15px; font-weight:bold; font-size: 16px;">En Baskın Sebep:</div>
+                            <div style="font-size: 15px; margin-top: 5px;">${data.olumsuz_sebepler}</div>
+                        </div>
+                    </div>
+                `;
+            } catch (e) { sonucDiv.innerHTML = "Sunucu Hatası!"; }
+        }
+    </script>
+</body>
+</html>
